@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORRE ISMA 🏃‍♂️❤️</title>
+    <style>
+        body {
+            background-color: #111;
+            color: white;
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            font-size: 28px;
+            text-align: center;
+            letter-spacing: 1px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(122, 93, 199, 0.5);
+        }
+
+        #game-container {
+            position: relative;
+            background: #222;
+            border: 4px solid #7A5DC7;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        canvas {
+            display: block;
+            background: #e0e0e0;
+        }
+
+        .score-board {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            color: #333;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 25px;
+            border-radius: 10px;
+            width: 80%;
+            z-index: 100;
+        }
+
+        button {
+            background-color: #7A5DC7;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: #8c6ee2;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🏃‍♂️ CORRE ISMA 🏃‍♀️</h1>
+    <p style="margin: 0 0 15px 0; color: #aaa; font-size: 14px;">Presiona ESPACIO o toca la pantalla para saltar</p>
+
+    <div id="game-container">
+        <div class="score-board">HI: <span id="high-score">00000</span>  SCORE: <span id="current-score">00000</span></div>
+        <canvas id="gameCanvas" width="800" height="250"></canvas>
+        
+        <div id="game-over-screen">
+            <h2 style="color: #ff4d4d; margin: 0; font-size: 26px;">¡TE ATRAPÓ! 💔</h2>
+            <p id="game-over-text" style="color: #eee; font-size: 16px;">Te dio una crisis renegona.</p>
+            <button onclick="resetGame()">Reiniciar Juego</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const scoreElement = document.getElementById("current-score");
+        const highScoreElement = document.getElementById("high-score");
+        const gameOverScreen = document.getElementById("game-over-screen");
+        const gameOverText = document.getElementById("game-over-text");
+
+        // Imagen de la cabeza
+        const headImg = new Image();
+        headImg.src = "cara.png";
+
+        // Variables de juego
+        let score = 0;
+        let highScore = 0;
+        let gameActive = true;
+        let gameSpeed = 5;
+        let obstacles = [];
+        let spawnTimer = 0;
+        let animationFrame = 0;
+
+        // Jugador ajustado para soportar el cabezón
+        const player = {
+            x: 70,
+            y: 110,
+            width: 50,
+            height: 125,
+            vy: 0,
+            gravity: 0.6,
+            jumpForce: -13.5,
+            isGrounded: false
+        };
+
+        // Controles globales
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") { jump(); e.preventDefault(); }
+        });
+        canvas.addEventListener("touchstart", (e) => {
+            jump(); e.preventDefault();
+        });
+
+        function jump() {
+            if (player.isGrounded && gameActive) {
+                player.vy = player.jumpForce;
+                player.isGrounded = false;
+            }
+        }
+
+        // Clase única de Obstáculos (Kakas o Moscas)
+        class Obstacle {
+            constructor(type) {
+                this.type = type; // 'kaka' o 'mosca'
+                this.width = type === 'kaka' ? 40 : 35;
+                this.height = type === 'kaka' ? 35 : 25;
+                this.x = canvas.width;
+                
+                if (this.type === 'kaka') {
+                    this.y = canvas.height - this.height - 15; // En el suelo
+                } else {
+                    this.y = canvas.height - this.height - 95; // Volando a media altura para saltarlas justo
+                }
+            }
+
+            update() {
+                this.x -= gameSpeed;
+            }
+
+            draw() {
+                ctx.save();
+                if (this.type === 'kaka') {
+                    // --- DIBUJO SEGURO DE KAKA MARRÓN ---
+                    ctx.fillStyle = "#654321"; // Marrón
+                    // Base
+                    ctx.fillRect(this.x, this.y + 15, this.width, 20);
+                    // Medio
+                    ctx.fillRect(this.x + 6, this.y + 5, this.width - 12, 12);
+                    // Punta
+                    ctx.fillRect(this.x + 14, this.y, this.width - 28, 8);
+                    
+                    // Ojos graciosos
+                    ctx.fillStyle = "#fff";
+                    ctx.fillRect(this.x + 8, this.y + 12, 6, 6);
+                    ctx.fillRect(this.x + 24, this.y + 12, 6, 6);
+                    ctx.fillStyle = "#000";
+                    ctx.fillRect(this.x + 10, this.y + 14, 3, 3);
+                    ctx.fillRect(this.x + 26, this.y + 14, 3, 3);
+                } else {
+                    // --- DIBUJO DE MOSCA VOLADORA ---
+                    let wingWave = Math.sin(animationFrame * 0.5) * 6;
+                    
+                    // Cuerpo negro de la mosca
+                    ctx.fillStyle = "#222";
+                    ctx.fillRect(this.x + 8, this.y + 6, 18, 12);
+                    
+                    // Alitas transparentes/celestes
+                    ctx.fillStyle = "rgba(173, 216, 230, 0.8)";
+                    ctx.fillRect(this.x + 10, this.y - 2 + wingWave, 6, 10);
+                    ctx.fillRect(this.x + 18, this.y - 2 - wingWave, 6, 10);
+                    
+                    // Ojos rojos de insecto
+                    ctx.fillStyle = "#ff0000";
+                    ctx.fillRect(this.x + 4, this.y + 6, 5, 5);
+                }
+                ctx.restore();
+            }
+        }
+
+        function spawnObstacles() {
+            spawnTimer++;
+            let rate = Math.max(40, 80 - (gameSpeed * 1.5));
+            if (spawnTimer > rate + Math.random() * 40) {
+                // Si el score pasa de 50, hay 40% de probabilidad de que salga una mosca voladora
+                if (score >= 50 && Math.random() > 0.6) {
+                    obstacles.push(new Obstacle('mosca'));
+                } else {
+                    obstacles.push(new Obstacle('kaka'));
+                }
+                spawnTimer = 0;
+            }
+        }
+
+        function resetGame() {
+            score = 0;
+            gameSpeed = 5;
+            obstacles = [];
+            player.y = canvas.height - player.height - 15;
+            player.vy = 0;
+            player.isGrounded = true;
+            gameActive = true;
+            gameOverScreen.style.display = "none";
+            scoreElement.innerText = "00000";
+            loop();
+        }
+
+        function loop() {
+            if (!gameActive) return;
+
+            // 1. Limpiar Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Dibujar Suelo
+            ctx.strokeStyle = "#555";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - 15);
+            ctx.lineTo(canvas.width, canvas.height - 15);
+            ctx.stroke();
+
+            // 3. Física del Jugador
+            player.vy += player.gravity;
+            player.y += player.vy;
+
+            if (player.y > canvas.height - player.height - 15) {
+                player.y = canvas.height - player.height - 15;
+                player.vy = 0;
+                player.isGrounded = true;
+            }
+
+            // 4. DIBUJAR AL JUGADOR (Cuerpo + CABEZA GIGANTE 75px)
+            animationFrame += gameSpeed * 0.15;
+            
+            let headSize = 75; // 👈 ¡Súper cabezón para que resalte!
+            let headX = player.x + (player.width / 2) - (headSize / 2);
+            let bobbing = player.isGrounded ? Math.sin(animationFrame) * 4 : 0;
+            let headY = player.y + bobbing;
+
+            let torsoX = player.x + (player.width / 2);
+            let torsoYStart = headY + headSize - 5;
+            let torsoYEnd = player.y + 80;
+
+            // Dibujar esqueleto del cuerpo
+            ctx.strokeStyle = "#111";
+            ctx.lineWidth = 6;
+            ctx.lineCap = "round";
+
+            // Torso
+            ctx.beginPath(); ctx.moveTo(torsoX, torsoYStart); ctx.lineTo(torsoX, torsoYEnd); ctx.stroke();
+
+            // Brazos
+            let arm = Math.sin(animationFrame) * 15;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(torsoX, torsoYStart + 15); ctx.lineTo(torsoX + 15 + arm, torsoYStart + 32);
+            ctx.moveTo(torsoX, torsoYStart + 15); ctx.lineTo(torsoX - 12 - arm, torsoYStart + 28);
+            ctx.stroke();
+
+            // Piernas animadas
+            let leg1 = Math.sin(animationFrame) * 24;
+            let leg2 = -Math.sin(animationFrame) * 24;
+            ctx.lineWidth = 5;
+
+            if (player.isGrounded) {
+                ctx.beginPath(); ctx.moveTo(torsoX, torsoYEnd); ctx.lineTo(torsoX + leg1, canvas.height - 15); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(torsoX, torsoYEnd); ctx.lineTo(torsoX + leg2, canvas.height - 15); ctx.stroke();
+            } else {
+                ctx.beginPath(); ctx.moveTo(torsoX, torsoYEnd); ctx.lineTo(torsoX - 5, torsoYEnd + 20); ctx.lineTo(torsoX + 15, torsoYEnd + 25); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(torsoX, torsoYEnd); ctx.lineTo(torsoX + 8, torsoYEnd + 15); ctx.lineTo(torsoX - 5, torsoYEnd + 30); ctx.stroke();
+            }
+
+            // Foto circular de Isma
+            if (headImg.complete && headImg.naturalWidth !== 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(torsoX, headY + (headSize / 2), headSize / 2, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(headImg, headX, headY, headSize, headSize);
+                ctx.restore();
+            } else {
+                ctx.fillStyle = "#ffb6c1";
+                ctx.beginPath(); ctx.arc(torsoX, headY + (headSize/2), headSize/2, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // 5. Lógica de Obstáculos e Incremento de Velocidad
+            spawnObstacles();
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update();
+                obstacles[i].draw();
+
+                // Colisiones exactas
+                if (
+                    player.x + 12 < obstacles[i].x + obstacles[i].width &&
+                    player.x + player.width - 12 > obstacles[i].x &&
+                    player.y < obstacles[i].y + obstacles[i].height &&
+                    player.y + player.height > obstacles[i].y
+                ) {
+                    gameActive = false;
+                    if (score > highScore) {
+                        highScore = score;
+                        highScoreElement.innerText = String(highScore).padStart(5, '0');
+                    }
+                    gameOverText.innerText = obstacles[i].type === 'kaka' ? "¡Pisaste una kakarota! 💩💔" : "¡Te picó una mosca renegona! 🪰💔";
+                    gameOverScreen.style.display = "block";
+                }
+
+                // Sumar puntos al esquivar
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                    scoreElement.innerText = String(score).padStart(5, '0');
+                    
+                    // TURBO EXTREMO CADA 20 DE SCORE
+                    if (score % 20 === 0) {
+                        gameSpeed += 1.5;
+                    }
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        // Ejecutar juego al cargar
+        loop();
+    </script>
+</body>
+</html>
